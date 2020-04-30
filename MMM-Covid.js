@@ -1,13 +1,13 @@
 /* global Module */
 
 /* Magic Mirror
- * Module: MMM-Chart
+ * Module: MMM-Covid
  *
- * By Evghenii Marinescu https://github.com/MarinescuEvghenii/
+ * By Michael Byers https://github.com/MichaelByers/
  * MIT Licensed.
  */
 
-Module.register("MMM-Chart", {
+Module.register("MMM-Covid", {
     defaults: {
         width       : 200,
         height      : 200,
@@ -20,7 +20,7 @@ Module.register("MMM-Chart", {
 	},
 
     getStyles: function() {
-        return ['chart.css', 'font-awesome.css'];
+        return ['covid.css', 'font-awesome.css'];
     },
 
 	start: function() {
@@ -29,9 +29,11 @@ Module.register("MMM-Chart", {
 
         // Set up the local values, here we construct the request url to use
         this.loaded = false;
-        this.covidData = [];
-        this.currData = null;
-        this.coData = null;
+        this.total = 0;
+        this.cases = null;
+        this.deaths = null;
+        this.hosp = null;
+        this.dates = null;
         this.url = ['https://covidtracking.com/api/states?state=CO', 'https://covidtracking.com/api/states/daily?state=CO'];
         this.config = Object.assign({}, this.defaults, this.config);
 
@@ -60,45 +62,34 @@ Module.register("MMM-Chart", {
 			var title = 'As of ';
 			var today = '';
 			var text = '';
-            var count = '';
-            var dataX = [];
-            var dataY = [];
-            var dataH = [];
 
-			today = moment(this.currData.dateChecked).format('MMMM Do');
-            count = this.currData.positive;
-			text = title + today + ' : ' + count;
+			today = moment().format('MMMM Do');
+			text = title + today + ' : ' + this.total;
 
             dataRow.innerHTML = text;
             wrapper.appendChild(dataRow);
-debugger;
             // Create chart canvas
             var chartEl = document.createElement("canvas");
             chartEl.width  = this.config.width;
             chartEl.height = this.config.height;
-            // format data
-            this.covidData.forEach(function(item){
-                dataX.push(moment(item.dateChecked).format('MM-DD'));
-                dataY.push(item.positive);
-                dataH.push(item.hospitalized);
-            });
-            // reverse array, currently newest is first
-            dataX.reverse();
-            dataY.reverse();
-            dataH.reverse();
             
             // build chart
             this.config.chartConfig = {
                 type: 'line',
                 data: {
-                  labels: dataX,
+                  labels: this.dates,
                   datasets: [{ 
-                      data: dataY,
+                      data: this.cases,
                       label: "Positive",
                       borderColor: "#3e95cd",
                       fill: false
                     }, { 
-                      data: dataH,
+                        data: this.deaths,
+                        label: "Deaths",
+                        borderColor: "#8b0000",
+                        fill: false
+                      }, { 
+                        data: this.hosp,
                       label: "Hospitalized",
                       borderColor: "#8e5ea2",
                       fill: false
@@ -132,9 +123,11 @@ debugger;
         if (notification === 'GOT-COVID') {  //&& payload.url === this.url) {
                 // we got some data so set the flag, stash the data to display then request the dom update
                 this.loaded = true;
-                this.covidData = payload.covidData;
-                this.currData = payload.currData;
-                this.coData = payload.coData;
+                this.total = payload.total;
+                this.dates = payload.dates;
+                this.cases = payload.cases;
+                this.deaths = payload.deaths;
+                this.hosp = payload.hosp;
                 this.updateDom(1000);
         }
     }

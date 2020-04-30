@@ -1,19 +1,17 @@
 /* Magic Mirror
- * Node Helper: MMM-GoogleDocs-Notes
+ * Node Helper: MMM-Covid
  *
- * By No3x
+ * By Michael Byers
  * MIT Licensed.
  */
 
 const NodeHelper = require('node_helper');
-const cheerio = require("cheerio");
 const fs = require('fs');
 const { google } = require('googleapis');
 const csvToJson = require('convert-csv-to-json');
 
-
-const TOKEN_DIR = `${process.env.HOME || process.env.HOMEPATH || process.env.USERPROFILE}/.credentials`;
-const TOKEN_PATH = `${TOKEN_DIR}/MMM-GoogleDocs-Notes.json`;
+const FILE_PATH = '/home/pi/MagicMirror/modules/MMM-Covid/';
+const TOKEN_FILE = `MMM-Covid.json`;
 
 var moduleInstance = null;
 var config = null;
@@ -36,10 +34,14 @@ module.exports = NodeHelper.create({
         client_secret,
         redirect_uris[0]
     );
-
+    token_file = `${this.path}/`+TOKEN_FILE;
+    console.log('token file: '+token_file);
     // Check if we have previously stored a token.
-    fs.readFile(TOKEN_PATH, (err, token) => {
-      if (err) return this.getNewToken(oAuth2Client, callback);
+    fs.readFile(token_file, (err, token) => {
+      if (err) {
+          console.log(err); 
+          return this.getNewToken(oAuth2Client, callback);
+      }
       oAuth2Client.setCredentials(JSON.parse(token));
       callback(oAuth2Client);
       return false;
@@ -54,7 +56,7 @@ module.exports = NodeHelper.create({
    */
   getNewToken(oAuth2Client, callback) {
     console.log(
-        '[MMM-GoogleDocs-Notes] Creating a token is an interactive process that requires user input. For that please run \\"node authorize.js\\" in the MMM-GoogleDocs-Notes directory'
+        '[MMM-Covid] Creating a token is an interactive process that requires user input. For that please run \\"node authorize.js\\" in the MMM-GoogleDocs-Notes directory'
     );
   },
 
@@ -63,74 +65,111 @@ module.exports = NodeHelper.create({
    * @param {google.auth.OAuth2} auth The authenticated Google OAuth 2.0 client.
    */
   async getNoteData(auth) {
-    console.log('[MMM-GoogleDocs-Notes] printDocContent');
+  
+    var total = 0;
+    var coData = null;
+    var cases = [];
+    var hTemp = [];
+    var hosp = [];
+    var dTemp = [];
+    var death = [];
+    var dates = [];
+    var myFileId = null;
+    const drive = google.drive({version: 'v3', auth});
+    const folderId = '1bBAC7H-pdEDgPxRuU_eR36ghzc0HWNf1';  //state of CO shared folder on google drive
+    var dest = FILE_PATH+'data.csv';
 
-    const drive = google.drive({ version: 'v3', auth });
     try {
       const { files } = (await drive.files.list({
-        orderBy: 'modifiedTime',
-        q: `name starts with '${config.notesPrefix}'`
+        q: `'${folderId}' in parents`,
+        pageSize: 1,
+        orderby: 'modifiedTime',
+        fields: 'files(id, name)',
       })).data;
 
-      // console.log(JSON.stringify(files, null, 4));
-      console.log(`[MMM-GoogleDocs-Notes] Found ${files.length} documents in drive matching the search 'title starts with ${config.notesPrefix}'.`);
+      console.log(`[MMM-Covid] Found ${files.length} documents in drive .`);
 
       if (!files.length > 0) {
-        console.log('[MMM-GoogleDocs-Notes] Did not find your note in drive.');
-      }
-
-      const notes = [];
-      for (const note of files) {
-        const noteDocumentId = note.id;
-        console.log(`[MMM-GoogleDocs-Notes] noteDocumentId: ${noteDocumentId}`);
-
+        console.log('[MMM-Covid] Did not find a file in shared drive.');
+      } else {
+        myFileId = files[0].id;
         try {
-          const { modifiedTime } = (await drive.files.get({
-            fileId: noteDocumentId,
-            fields: ['modifiedTime']
-          })).data;
-
-          console.log(`[MMM-GoogleDocs-Notes] last modified time of the note: ${modifiedTime}`);
-
-          try {
-            const content = (await drive.files.export({
-              fileId: noteDocumentId,
-              mimeType: 'text/html'
-            })).data;
-
-            //console.log(`[MMM-GoogleDocs-Notes] doc content of your note: ${content}`);
-            _this.coData = csvToJson.formatValueByType().fieldDelimiter(',').getJsonFromCsv(content);
-
-            let $ = cheerio.load(content);
-            $('*').css("width", "");
-            $('*').css("height", "");
-
-            const htmlContent = $('body').html();
-
-            //console.log(`[MMM-GoogleDocs-Notes] html content of your note: ${htmlContent}`);
-
-            notes.push({
-              noteText: htmlContent,
-              dateStamp: modifiedTime
+          // now try to export
+          drive.files.get({
+            fileId: myFileId,
+            alt: 'media'
+          }, (err1, res1) => {
+            if (err1) return console.log('[MMM-Covid] The Export API returned an error: ' + err1);
+            fs.writeFileSync(dest, res1.data);
+            coData = csvToJson.fieldDelimiter(',').getJsonFromCsv(dest);
+            total = coData[0].value;            
+            // extract data we want
+            console.log('[MMM-Covid] Parsing Data...');
+            coData.forEach(function(item){
+              var element = null;
+              if ((item.description == 'Cases of COVID-19 in Colorado by Date of Illness Onset') && (item.metric == 'Three-Day Moving Average Of Cases')) {
+                cases.push(item.value);
+                dates.push(item.attribute);
+              }
+              else if ((item.description == 'Cumulative Number of Hospitalized Cases of COVID-19 in Colorado by Date of Illness Onset') && (item.metric == 'Cases')) {
+                element = { date: item.attribute,
+                            value: item.value};
+                hTemp.push(element);
+              }
+              else if ((item.description == 'Number of Deaths From COVID-19 in Colorado by Date of Death - By Day') && (item.metric == 'Deaths')) {
+                element = { date: item.attribute,
+                            value: item.value};
+                dTemp.push(element);
+              }
             });
-          } catch (err) {
-            console.log(
-              `[MMM-GoogleDocs-Notes] Failed to get the content of your note. The docs API returned an error: ${err}`
+            // sync up dates, data structures are slightly misaligned
+            // and make hosp based on each day vs cumulative
+            var d = 1;
+            var h = 1;
+            hosp[0] = 0;
+            death[0] = 0;
+
+            for(x=1; x<dates.length; x++) {
+              if(typeof hTemp[h] === 'undefined') {
+                hosp[x] = null;
+              } else {
+                console.log(h+' '+hTemp[h]);
+                if (dates[x] == hTemp[h].date) {
+                  hosp[x] = hTemp[h].value - hTemp[h-1].value;
+                  h=h+1;
+                } else {
+                  hosp[x] = null;
+                }
+              }
+              if(typeof dTemp[d] === 'undefined') {
+                death[x] = null;
+              } else {
+                console.log(d+' '+dTemp[d]);
+                if(dates[x] == dTemp[d].date) {
+                  death[x] = dTemp[d].value;
+                  d=d+1;
+                } else {
+                  death[x] = null;
+                }
+              } 
+            }
+
+            console.log('[MMM-Covid] Sending Notice');
+            moduleInstance.sendSocketNotification(
+              'GOT-COVID',
+              { total: total, dates: dates, cases: cases, hosp: hosp, deaths: death }
             );
-          }
+          });
+
         } catch (err) {
           console.log(
-            `[MMM-GoogleDocs-Notes] Failed to get the last modified time of your note. The docs API returned an error: ${err}`
+            `[MMM-Covid] Failed to get the content of your note. The docs API returned an error: ${err}`
           );
         }
       }
-      moduleInstance.sendSocketNotification(
-        'MMM-GOOGLEDOCS-NOTES-RESPONSE',
-        { data: notes }
-      );
     } catch (err) {
       console.log(
-        `[MMM-GoogleDocs-Notes] Failed to list the documents in your drive. The docs API returned an error: ${err}`
+        `[MMM-Covid] Failed to list the documents in your drive. The docs API returned an error: ${err}`
       );
     }
   },
@@ -142,7 +181,7 @@ module.exports = NodeHelper.create({
 	 * argument payload mixed - The payload of the notification.
 	 */
   socketNotificationReceived(notification, payload) {
-    if (notification === 'MMM-GOOGLEDOCS-NOTES-GET') {
+    if (notification === 'GET-COVID') {
       if (config == null) {
         config = payload;
       }
@@ -153,10 +192,11 @@ module.exports = NodeHelper.create({
       fs.readFile(`${this.path}/client_secret.json`, (err, content) => {
         if (err) return console.log('Error loading client secret file:', err);
         // Authorize a client with credentials, then call the Google Docs API.
-        console.log('[MMM-GoogleDocs-Notes] authorizing...');
+        console.log('[MMM-Covid] authorizing...');
         this.authorize(JSON.parse(content), this.getNoteData);
         return false;
       });
     }
   }
 });
+
