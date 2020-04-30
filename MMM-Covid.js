@@ -55,8 +55,8 @@ Module.register("MMM-Covid", {
         var wrapper = document.createElement('div');
 
         if (this.loaded) {
-//	 	    wrapper.className = 'data';
-            wrapper.setAttribute("style", "position: relative; display: inline-block;");
+	 	    wrapper.className = 'data';
+//            wrapper.setAttribute("style", "position: relative; display: inline-block;");
             // create today's data row
             dataRow = document.createElement('div');
 			var title = 'As of ';

@@ -8,13 +8,9 @@ span.quote
 
 .data {
   display: flex;
-  text-align: center;
+  text-align: left;
   padding-bottom: 5px;
-  max-width: 200px;
+  min-width: 375px;
   font-size: 30px;
 }
-.forecastText {
-  font-size: 17px;
-  max-width: 130px;
-  height: 50px;
-}
+

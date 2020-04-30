@@ -9,6 +9,7 @@ const NodeHelper = require('node_helper');
 const fs = require('fs');
 const { google } = require('googleapis');
 const csvToJson = require('convert-csv-to-json');
+const moment = require('moment');
 
 const FILE_PATH = '/home/pi/MagicMirror/modules/MMM-Covid/';
 const TOKEN_FILE = `MMM-Covid.json`;
@@ -35,7 +36,6 @@ module.exports = NodeHelper.create({
         redirect_uris[0]
     );
     token_file = `${this.path}/`+TOKEN_FILE;
-    console.log('token file: '+token_file);
     // Check if we have previously stored a token.
     fs.readFile(token_file, (err, token) => {
       if (err) {
@@ -109,15 +109,15 @@ module.exports = NodeHelper.create({
               var element = null;
               if ((item.description == 'Cases of COVID-19 in Colorado by Date of Illness Onset') && (item.metric == 'Three-Day Moving Average Of Cases')) {
                 cases.push(item.value);
-                dates.push(item.attribute);
+                dates.push(moment(item.attribute).format('MM-DD'));
               }
               else if ((item.description == 'Cumulative Number of Hospitalized Cases of COVID-19 in Colorado by Date of Illness Onset') && (item.metric == 'Cases')) {
-                element = { date: item.attribute,
+                element = { date: moment(item.attribute).format('MM-DD'),
                             value: item.value};
                 hTemp.push(element);
               }
               else if ((item.description == 'Number of Deaths From COVID-19 in Colorado by Date of Death - By Day') && (item.metric == 'Deaths')) {
-                element = { date: item.attribute,
+                element = { date: moment(item.attribute).format('MM-DD'),
                             value: item.value};
                 dTemp.push(element);
               }
@@ -133,7 +133,6 @@ module.exports = NodeHelper.create({
               if(typeof hTemp[h] === 'undefined') {
                 hosp[x] = null;
               } else {
-                console.log(h+' '+hTemp[h]);
                 if (dates[x] == hTemp[h].date) {
                   hosp[x] = hTemp[h].value - hTemp[h-1].value;
                   h=h+1;
@@ -144,7 +143,6 @@ module.exports = NodeHelper.create({
               if(typeof dTemp[d] === 'undefined') {
                 death[x] = null;
               } else {
-                console.log(d+' '+dTemp[d]);
                 if(dates[x] == dTemp[d].date) {
                   death[x] = dTemp[d].value;
                   d=d+1;
