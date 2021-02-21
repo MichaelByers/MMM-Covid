@@ -56,15 +56,15 @@ Module.register("MMM-Covid", {
 
         if (this.loaded) {
 	 	    wrapper.className = 'data';
-//            wrapper.setAttribute("style", "position: relative; display: inline-block;");
+            wrapper.setAttribute("style", "position: relative; display: inline-block;");
             // create today's data row
             dataRow = document.createElement('div');
-			var title = 'As of ';
+			var title = 'Covid-19 in CO : ';
 			var today = '';
 			var text = '';
 
 			today = moment().format('MMMM Do');
-			text = title + today + ' : ' + this.total;
+			text = title + this.total;
 
             dataRow.innerHTML = text;
             wrapper.appendChild(dataRow);
@@ -81,22 +81,41 @@ Module.register("MMM-Covid", {
                   datasets: [{ 
                       data: this.cases,
                       label: "Positive",
+                      yAxisID: 'A',
                       borderColor: "#3e95cd",
                       fill: false
                     }, { 
                         data: this.deaths,
                         label: "Deaths",
+                        yAxisID: 'B',
                         borderColor: "#8b0000",
                         fill: false
                       }, { 
                         data: this.hosp,
                       label: "Hospitalized",
+                      yAxisID: 'B',
                       borderColor: "#8e5ea2",
                       fill: false
                     }
                   ]
                 },
                 options: {
+                  scales: {
+                    yAxes: [{
+                      id: 'A',
+                      type: 'linear',
+                      position: 'left',
+                    }, {
+                      id: 'B',
+                      type: 'linear',
+                      position: 'right',
+                    }]
+                  },
+                  elements: {
+                    point:{
+                        radius: 0
+                    }
+                  },
                   title: {
                     display: true,
                     text: 'Colorado Cases'
