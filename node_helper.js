@@ -191,7 +191,7 @@ module.exports = NodeHelper.create({
             // sync up dates, data structures are slightly misaligned
             // and make hosp based on each day vs cumulative
             var d = 1;
-            var h = 1;
+            var h = 3; //hospital data starts a little early
             hosp[0] = 0;
             death[0] = 0;
 
